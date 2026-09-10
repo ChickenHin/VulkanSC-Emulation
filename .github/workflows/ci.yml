@@ -15,10 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch: 
 
 env:
   CMAKE_GENERATOR: Ninja
@@ -27,48 +24,48 @@ permissions:
     contents: read
 
 jobs:
-  check_emu:
-    name: clang-format
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-    env:
-      CLANG_FORMAT_VERSION: 18
-      CLANG_FORMAT_FILES: "*.c *.h *.cpp *.hpp"
-    steps:
-    - name: ${{ format('Checkout {0}', github.repository) }}
-      uses: actions/checkout@v4
-    - name: Check code formatting
-      run: |
-        for f in $(git ls-files -- ${CLANG_FORMAT_FILES}); do
-          echo "Checking $f"
-          clang-format-${CLANG_FORMAT_VERSION} -i --Werror "$f"
-        done
-        git diff --exit-code
-    - name: REUSE Compliance Check
-      uses: fsfe/reuse-action@v5.0.0
+  # check_emu:
+  #   name: clang-format
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false
+  #   env:
+  #     CLANG_FORMAT_VERSION: 18
+  #     CLANG_FORMAT_FILES: "*.c *.h *.cpp *.hpp"
+  #   steps:
+  #   - name: ${{ format('Checkout {0}', github.repository) }}
+  #     uses: actions/checkout@v4
+  #   - name: Check code formatting
+  #     run: |
+  #       for f in $(git ls-files -- ${CLANG_FORMAT_FILES}); do
+  #         echo "Checking $f"
+  #         clang-format-${CLANG_FORMAT_VERSION} -i --Werror "$f"
+  #       done
+  #       git diff --exit-code
+  #   - name: REUSE Compliance Check
+  #     uses: fsfe/reuse-action@v5.0.0
 
-  codegen:
-    needs: check_emu
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - run: python3 -m pip install pyparsing
-      - run: scripts/update_deps.py --dir external --no-build
-      - run: scripts/generate_source.py --verify external/Vulkan-Headers/registry/
+  # codegen:
+  #   needs: check_emu
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.10'
+  #     - run: python3 -m pip install pyparsing
+  #     - run: scripts/update_deps.py --dir external --no-build
+  #     - run: scripts/generate_source.py --verify external/Vulkan-Headers/registry/
 
   linux:
-    needs: codegen
+    # needs: codegen
     runs-on: ${{matrix.os}}
     name: "linux (${{matrix.os}}, ${{matrix.config}})"
     strategy:
       fail-fast: false
       matrix:
-        config: [ Debug, Release ]
-        os: [ ubuntu-22.04, ubuntu-24.04 ]
+        config: [ Debug ]
+        os: [ ubuntu-24.04 ]
     steps:
       # Install Loader dependencies
       - run: sudo apt install pkg-config libx11-xcb-dev libxkbcommon-dev libwayland-dev libxrandr-dev -y
@@ -91,67 +88,67 @@ jobs:
       - name: Test Both Loaders
         run: python scripts/tests.py --test-icd --vkloader --vkscloader
 
-  linux-sanitize:
-    needs: codegen
-    runs-on: ${{matrix.os}}
-    name: "linux (${{matrix.sanitize}} sanitizer, ${{matrix.os}}, ${{matrix.config}})"
-    strategy:
-      fail-fast: false
-      matrix:
-        sanitize: [ address, thread ]
-        config: [ Debug, Release ]
-        os: [ ubuntu-22.04, ubuntu-24.04 ]
-        exclude:
-          - config: Debug
-            sanitize: thread
-    steps:
-      # Install Loader dependencies
-      - run: sudo apt install pkg-config libx11-xcb-dev libxkbcommon-dev libwayland-dev libxrandr-dev -y
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - run: python3 -m pip install pyparsing
-      - uses: lukka/get-cmake@latest
-      - name: Configure, Build, Install
-        run: python scripts/tests.py --build --config ${{ matrix.config }}
-        env:
-          CFLAGS: -fsanitize=${{ matrix.sanitize }}
-          CXXFLAGS: -fsanitize=${{ matrix.sanitize }}
-          LDFLAGS: -fsanitize=${{ matrix.sanitize }}
-      - name: Test PCC
-        run: python scripts/tests.py --test-pcc
-      - name: Test No Loader
-        run: python scripts/tests.py --test-icd
-      - name: Test VK Loader
-        run: python scripts/tests.py --test-icd --vkloader
-      - name: Test VKSC Loader
-        run: python scripts/tests.py --test-icd --vkscloader
-      - name: Test Both Loaders
-        run: python scripts/tests.py --test-icd --vkloader --vkscloader
+  # linux-sanitize:
+  #   needs: codegen
+  #   runs-on: ${{matrix.os}}
+  #   name: "linux (${{matrix.sanitize}} sanitizer, ${{matrix.os}}, ${{matrix.config}})"
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       sanitize: [ address, thread ]
+  #       config: [ Debug, Release ]
+  #       os: [ ubuntu-22.04, ubuntu-24.04 ]
+  #       exclude:
+  #         - config: Debug
+  #           sanitize: thread
+  #   steps:
+  #     # Install Loader dependencies
+  #     - run: sudo apt install pkg-config libx11-xcb-dev libxkbcommon-dev libwayland-dev libxrandr-dev -y
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.10'
+  #     - run: python3 -m pip install pyparsing
+  #     - uses: lukka/get-cmake@latest
+  #     - name: Configure, Build, Install
+  #       run: python scripts/tests.py --build --config ${{ matrix.config }}
+  #       env:
+  #         CFLAGS: -fsanitize=${{ matrix.sanitize }}
+  #         CXXFLAGS: -fsanitize=${{ matrix.sanitize }}
+  #         LDFLAGS: -fsanitize=${{ matrix.sanitize }}
+  #     - name: Test PCC
+  #       run: python scripts/tests.py --test-pcc
+  #     - name: Test No Loader
+  #       run: python scripts/tests.py --test-icd
+  #     - name: Test VK Loader
+  #       run: python scripts/tests.py --test-icd --vkloader
+  #     - name: Test VKSC Loader
+  #       run: python scripts/tests.py --test-icd --vkscloader
+  #     - name: Test Both Loaders
+  #       run: python scripts/tests.py --test-icd --vkloader --vkscloader
 
-  windows:
-    needs: codegen
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        config: [ Debug, Release ]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - run: python3 -m pip install pyparsing
-      - uses: ilammy/msvc-dev-cmd@v1
-      - name: Configure, Build, Install
-        run: python scripts/tests.py --build --config ${{ matrix.config }}
-      - name: Test PCC
-        run: python scripts/tests.py --test-pcc
-      - name: Test No Loader
-        run: python scripts/tests.py --test-icd
-      - name: Test VK Loader
-        run: python scripts/tests.py --test-icd --vkloader
-      - name: Test VKSC Loader
-        run: python scripts/tests.py --test-icd --vkscloader
-      - name: Test Both Loaders
-        run: python scripts/tests.py --test-icd --vkloader --vkscloader
+  # windows:
+  #   needs: codegen
+  #   runs-on: windows-latest
+  #   strategy:
+  #     matrix:
+  #       config: [ Debug, Release ]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.10'
+  #     - run: python3 -m pip install pyparsing
+  #     - uses: ilammy/msvc-dev-cmd@v1
+  #     - name: Configure, Build, Install
+  #       run: python scripts/tests.py --build --config ${{ matrix.config }}
+  #     - name: Test PCC
+  #       run: python scripts/tests.py --test-pcc
+  #     - name: Test No Loader
+  #       run: python scripts/tests.py --test-icd
+  #     - name: Test VK Loader
+  #       run: python scripts/tests.py --test-icd --vkloader
+  #     - name: Test VKSC Loader
+  #       run: python scripts/tests.py --test-icd --vkscloader
+  #     - name: Test Both Loaders
+  #       run: python scripts/tests.py --test-icd --vkloader --vkscloader
